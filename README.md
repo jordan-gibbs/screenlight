@@ -8,6 +8,12 @@
 
 <sub>Left: a normal video call. Right: the same call with Screenlight on.</sub>
 
+## How it works
+
+Press the hotkey (or let your camera turn it on), and a soft light wraps the edges of every screen. A small HUD lets you dial in the warmth, width and softness, then gets out of your way.
+
+![Screenlight on a desktop: the hotkey turns the light on, and the HUD sliders adjust its warmth, width and softness](assets/demo.gif)
+
 ## What it does
 
 - **Ctrl + Alt + L** (Ctrl + Option + L on macOS) toggles the light and briefly shows the HUD.
