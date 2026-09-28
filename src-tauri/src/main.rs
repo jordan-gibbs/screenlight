@@ -151,7 +151,6 @@ fn fit_overlays(app: &AppHandle) {
                 }
             }
         };
-        let _ = win.set_ignore_cursor_events(true);
         let _ = win.set_content_protected(hide_from_capture);
         let _ = win.set_position(*m.position());
         let _ = win.set_size(*m.size());
@@ -190,6 +189,8 @@ fn apply_light(app: &AppHandle, on: bool, auto: bool) {
         for (label, win) in app.webview_windows() {
             if is_overlay(&label) {
                 let _ = win.show();
+                // Must follow show(): on Linux the native window only exists once shown.
+                let _ = win.set_ignore_cursor_events(true);
                 let _ = win.set_always_on_top(true);
             }
         }
