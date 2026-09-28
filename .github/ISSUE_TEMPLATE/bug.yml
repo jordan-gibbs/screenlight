@@ -1,0 +1,35 @@
+name: Bug report
+description: Something doesn't work as described in the README.
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Screenlight is intentionally tiny. Bug reports are welcome; feature requests generally aren't (see CONTRIBUTING.md).
+  - type: dropdown
+    id: os
+    attributes:
+      label: OS
+      options: [Windows 11, Windows 10, macOS, Linux (X11), Linux (Wayland)]
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: OS version / desktop environment
+      placeholder: e.g. macOS 15.4, Ubuntu 24.04 GNOME
+    validations:
+      required: true
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened, and what did you expect?
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: "1. …\n2. …"
+    validations:
+      required: true
