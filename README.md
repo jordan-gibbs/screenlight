@@ -1,8 +1,16 @@
 # Screenlight
 
-A soft ring light around the edges of your screen, like a phone's front-camera flash, for your desktop. It's a single ~3.5 MB native binary (Tauri 2: Rust + a web UI).
+**Look sharper on camera.** Screenlight turns your screen's edges into a soft ring light. It evens out your face and brightens your eyes on every video call, with no extra hardware.
 
-- **Ctrl + Alt + L** toggles the light and briefly shows the HUD.
+**Windows · macOS · Linux**. It's free and open source, a single ~3.5 MB native app.
+
+![Without Screenlight (left) and with it (right), on a video call](assets/hero.jpg)
+
+<sub>Left: a normal video call. Right: the same call with Screenlight on.</sub>
+
+## What it does
+
+- **Ctrl + Alt + L** (Ctrl + Option + L on macOS) toggles the light and briefly shows the HUD.
 - **Tray icon**: left-click toggles the light. Right-click opens the menu (Light / Adjust… / Quit).
 - **HUD**: Intensity (0–100% opacity), Warmth (2000–9000 K), Width, Softness. It fades out on its own when you're not hovering it.
 - Covers every display. Sizes scale with each display, so it looks the same on a laptop and on an ultrawide.
@@ -29,6 +37,8 @@ npx tauri dev                 # run from source
 ```
 
 ## Layout
+
+Tauri 2: a Rust core and a static web UI, with no JS bundler.
 
 - `src-tauri/src/main.rs`: tray, hotkey, per-monitor overlay windows, settings
 - `ui/overlay.html`: the light itself (layered inset box-shadows)
