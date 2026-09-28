@@ -1,0 +1,53 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8" />
+<style>
+  html, body { margin: 0; height: 100%; overflow: hidden; background: transparent; }
+  #glow {
+    position: fixed;
+    inset: 0;
+    opacity: 0;
+    transition: opacity 400ms cubic-bezier(.2, .7, .2, 1);
+    will-change: opacity;
+  }
+  #glow.on { opacity: var(--intensity, 1); }
+</style>
+</head>
+<body>
+<div id="glow"></div>
+<script type="module">
+  import { kelvinToRgb, rgb, tauri } from "./light.js";
+
+  const glow = document.getElementById("glow");
+  let state = null;
+
+  // Everything is sized against the shorter side of this display, so the
+  // band looks the same on a 13" laptop and a 49" ultrawide.
+  function render() {
+    if (!state) return;
+    const vmin = Math.min(innerWidth, innerHeight);
+    const band = (state.width / 100) * vmin;
+    const soft = state.softness;
+    const c = kelvinToRgb(state.kelvin);
+
+    const core = band * (1 - soft * 0.55);        // fully lit edge
+    const feather = band * (0.4 + soft * 2.2);     // blur into the band
+    const halo = vmin * (0.04 + soft * 0.22);      // long falloff toward center
+
+    glow.style.boxShadow = [
+      `inset 0 0 0 ${core}px ${rgb(c)}`,
+      `inset 0 0 ${feather}px ${band}px ${rgb(c)}`,
+      `inset 0 0 ${halo}px ${band * 1.1}px ${rgb(c, 0.35 * soft)}`,
+    ].join(", ");
+    glow.style.setProperty("--intensity", state.intensity);
+    glow.classList.toggle("on", state.on);
+  }
+
+  tauri.event.listen("state", (e) => { state = e.payload; render(); });
+  addEventListener("resize", render);
+  state = await tauri.core.invoke("get_state");
+  requestAnimationFrame(render);
+</script>
+</body>
+</html>
