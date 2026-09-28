@@ -31,12 +31,12 @@
     const soft = state.softness;
     const c = kelvinToRgb(state.kelvin);
 
-    const core = band * (1 - soft * 0.55);        // fully lit edge
+    const core = band * (1 - soft * 0.55);        // lit edge, feathered so there's no seam
     const feather = band * (0.4 + soft * 2.2);     // blur into the band
     const halo = vmin * (0.04 + soft * 0.22);      // long falloff toward center
 
     glow.style.boxShadow = [
-      `inset 0 0 0 ${core}px ${rgb(c)}`,
+      `inset 0 0 ${core}px ${core}px ${rgb(c)}`,
       `inset 0 0 ${feather}px ${band}px ${rgb(c)}`,
       `inset 0 0 ${halo}px ${band * 1.1}px ${rgb(c, 0.35 * soft)}`,
     ].join(", ");
