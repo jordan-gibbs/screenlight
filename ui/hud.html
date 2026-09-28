@@ -1,0 +1,282 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8" />
+<style>
+  @font-face {
+    font-family: "Geist";
+    src: url("./fonts/geist.woff2") format("woff2");
+    font-weight: 100 900;
+  }
+  :root {
+    --light: 255, 228, 196;
+    --ink: #f4f3f1;
+    --mute: rgba(244, 243, 241, .46);
+    --faint: rgba(244, 243, 241, .09);
+    --card: rgba(19, 19, 22, .94);
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0; height: 100%; overflow: hidden;
+    background: transparent;
+    font-family: "Geist", system-ui, sans-serif;
+    color: var(--ink);
+    -webkit-font-smoothing: antialiased;
+    user-select: none;
+    cursor: default;
+  }
+  body { padding: 24px; }
+
+  .card {
+    position: relative;
+    height: 100%;
+    padding: 18px 20px;
+    border-radius: 22px;
+    background: var(--card);
+    border: 1px solid rgba(255, 255, 255, .07);
+    box-shadow:
+      0 8px 20px rgba(0, 0, 0, .4),
+      0 0 0 1px rgba(0, 0, 0, .4),
+      inset 0 1px 0 rgba(255, 255, 255, .05);
+    opacity: 0;
+    transform: translateY(10px) scale(.98);
+    transition: opacity 220ms ease, transform 320ms cubic-bezier(.2, .8, .2, 1);
+    overflow: hidden;
+  }
+  body.shown .card { opacity: 1; transform: none; }
+
+  /* a faint echo of the current light along the card's top edge */
+  .card::before {
+    content: "";
+    position: absolute; inset: -1px -1px auto -1px; height: 90px;
+    background: radial-gradient(120% 90px at 50% 0, rgba(var(--light), calc(.16 * var(--lit, 0))), transparent 70%);
+    transition: background 300ms ease;
+    pointer-events: none;
+  }
+
+  header {
+    position: relative;
+    display: flex; align-items: center; justify-content: space-between;
+    height: 32px; margin-bottom: 16px;
+  }
+  .brand { display: flex; align-items: center; gap: 10px; font-size: 14px; font-weight: 560; letter-spacing: -.01em; }
+  .dot {
+    width: 14px; height: 11px; border-radius: 3.5px;
+    border: 2px solid rgba(var(--light), calc(.35 + .65 * var(--lit, 0)));
+    box-shadow: 0 0 calc(10px * var(--lit, 0)) rgba(var(--light), .9);
+    transition: all 300ms ease;
+  }
+
+  /* power switch */
+  .switch {
+    all: unset;
+    position: relative; width: 44px; height: 26px; border-radius: 99px;
+    background: var(--faint);
+    transition: background 260ms ease, box-shadow 260ms ease;
+  }
+  .switch::after {
+    content: "";
+    position: absolute; top: 3px; left: 3px; width: 20px; height: 20px; border-radius: 50%;
+    background: #8d8c8a;
+    transition: transform 300ms cubic-bezier(.3, .9, .3, 1.2), background 260ms ease;
+  }
+  .switch[aria-checked="true"] {
+    background: rgb(var(--light));
+    box-shadow: 0 0 18px rgba(var(--light), .45);
+  }
+  .switch[aria-checked="true"]::after { transform: translateX(18px); background: #141416; }
+
+  .switch.small { width: 32px; height: 18px; }
+  .switch.small::after { top: 2px; left: 2px; width: 14px; height: 14px; }
+  .switch.small[aria-checked="true"]::after { transform: translateX(14px); }
+  .switch.small[aria-checked="true"] { box-shadow: 0 0 10px rgba(var(--light), .35); }
+
+  .auto {
+    position: relative;
+    display: flex; align-items: center; justify-content: space-between;
+    margin-top: 16px; padding-top: 14px;
+    border-top: 1px solid var(--faint);
+    font-size: 12px; color: var(--mute);
+  }
+
+  .controls { display: grid; gap: 14px; position: relative; }
+  .row { display: grid; gap: 8px; }
+  .label { display: flex; justify-content: space-between; font-size: 12px; letter-spacing: .01em; }
+  .label span:first-child { color: var(--mute); }
+  .label span:last-child { font-variant-numeric: tabular-nums; font-weight: 500; }
+
+  input[type=range] {
+    -webkit-appearance: none; appearance: none;
+    width: 100%; height: 18px; margin: 0; background: transparent;
+    --p: 50%;
+  }
+  input[type=range]::-webkit-slider-runnable-track {
+    height: 4px; border-radius: 99px;
+    background: linear-gradient(90deg, rgba(var(--light), .95) var(--p), var(--faint) var(--p));
+  }
+  input[type=range].kelvin::-webkit-slider-runnable-track {
+    background: var(--kelvin-track);
+  }
+  input[type=range]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 16px; height: 16px; margin-top: -6px; border-radius: 50%;
+    background: #fbfaf8;
+    box-shadow: 0 1px 4px rgba(0, 0, 0, .5), 0 0 0 4px rgba(255, 255, 255, 0);
+    transition: box-shadow 160ms ease, transform 160ms ease;
+  }
+  input[type=range]:hover::-webkit-slider-thumb { box-shadow: 0 1px 4px rgba(0, 0, 0, .5), 0 0 0 5px rgba(255, 255, 255, .08); }
+  input[type=range]:active::-webkit-slider-thumb { transform: scale(1.12); }
+  input[type=range]:focus { outline: none; }
+
+  footer {
+    position: relative;
+    display: flex; align-items: center; justify-content: space-between;
+    margin-top: 18px; font-size: 11px; color: var(--mute);
+  }
+  .keys { display: flex; align-items: center; gap: 4px; }
+  kbd {
+    font: inherit; font-size: 10.5px; font-weight: 500; color: var(--ink);
+    padding: 3px 6px; border-radius: 6px;
+    background: var(--faint); border: 1px solid rgba(255, 255, 255, .06);
+  }
+  .keys .hint { margin-left: 6px; }
+  .quit {
+    all: unset; font-size: 11px; color: var(--mute);
+    padding: 3px 6px; border-radius: 6px;
+    transition: color 160ms ease, background 160ms ease;
+  }
+  .quit:hover { color: var(--ink); background: var(--faint); }
+</style>
+</head>
+<body>
+<div class="card" id="card">
+  <header>
+    <div class="brand"><div class="dot"></div>Screenlight</div>
+    <button class="switch" id="power" role="switch" aria-checked="false" aria-label="Light"></button>
+  </header>
+
+  <div class="controls">
+    <div class="row">
+      <div class="label"><span>Intensity</span><span id="intensity-v"></span></div>
+      <input type="range" id="intensity" min="0" max="100" step="1" />
+    </div>
+    <div class="row">
+      <div class="label"><span>Warmth</span><span id="kelvin-v"></span></div>
+      <input type="range" id="kelvin" class="kelvin" min="2000" max="9000" step="50" />
+    </div>
+    <div class="row">
+      <div class="label"><span>Width</span><span id="width-v"></span></div>
+      <input type="range" id="width" min="1" max="30" step="0.5" />
+    </div>
+    <div class="row">
+      <div class="label"><span>Softness</span><span id="softness-v"></span></div>
+      <input type="range" id="softness" min="0" max="100" step="1" />
+    </div>
+  </div>
+
+  <div class="auto">
+    <span>Auto-on with camera</span>
+    <button class="switch small" id="auto" role="switch" aria-checked="false" aria-label="Auto-on with camera"></button>
+  </div>
+
+  <footer>
+    <div class="keys" id="keys"></div>
+    <button class="quit" id="quit">Quit</button>
+  </footer>
+</div>
+
+<script type="module">
+  import { kelvinToRgb, tauri } from "./light.js";
+
+  const { invoke } = tauri.core;
+  const win = tauri.window.getCurrentWindow();
+  const $ = (id) => document.getElementById(id);
+  const root = document.documentElement.style;
+
+  let state = await invoke("get_state");
+
+  // The warmth track is a real gradient of the colours it produces.
+  const stops = [];
+  for (let k = 2000; k <= 9000; k += 500) {
+    const [r, g, b] = kelvinToRgb(k);
+    stops.push(`rgb(${r},${g},${b}) ${((k - 2000) / 7000) * 100}%`);
+  }
+  root.setProperty("--kelvin-track", `linear-gradient(90deg, ${stops.join(",")})`);
+
+  const fields = {
+    intensity: { to: (v) => v * 100, from: (v) => v / 100, fmt: (v) => `${Math.round(v * 100)}%` },
+    kelvin:    { to: (v) => v,       from: (v) => v,       fmt: (v) => `${Math.round(v)}K` },
+    width:     { to: (v) => v,       from: (v) => v,       fmt: (v) => `${(+v).toFixed(1)}%` },
+    softness:  { to: (v) => v * 100, from: (v) => v / 100, fmt: (v) => `${Math.round(v * 100)}%` },
+  };
+
+  function paint() {
+    const [r, g, b] = kelvinToRgb(state.kelvin);
+    root.setProperty("--light", `${r}, ${g}, ${b}`);
+    root.setProperty("--lit", state.on ? state.intensity : 0);
+    $("power").setAttribute("aria-checked", state.on);
+    $("auto").setAttribute("aria-checked", state.auto_camera);
+    for (const [key, f] of Object.entries(fields)) {
+      const input = $(key);
+      if (document.activeElement !== input || !dragging) input.value = f.to(state[key]);
+      const pct = ((input.value - input.min) / (input.max - input.min)) * 100;
+      input.style.setProperty("--p", `${pct}%`);
+      $(`${key}-v`).textContent = f.fmt(state[key]);
+    }
+    $("keys").innerHTML =
+      state.hotkey.split("+").map((k) => `<kbd>${k}</kbd>`).join("") +
+      `<span class="hint">toggle</span>`;
+  }
+
+  let dragging = false;
+  for (const [key, f] of Object.entries(fields)) {
+    const input = $(key);
+    input.addEventListener("input", () => {
+      state[key] = f.from(+input.value);
+      paint();
+      const { intensity, kelvin, width, softness } = state;
+      invoke("update_settings", { intensity, kelvin, width, softness });
+    });
+    input.addEventListener("pointerdown", () => (dragging = true));
+  }
+  addEventListener("pointerup", () => { dragging = false; scheduleHide(1400); });
+
+  $("power").addEventListener("click", () => invoke("set_on", { on: !state.on }));
+  $("auto").addEventListener("click", () => invoke("set_auto_camera", { enabled: !state.auto_camera }));
+  $("quit").addEventListener("click", () => invoke("quit"));
+
+  tauri.event.listen("state", (e) => {
+    const on = e.payload.on;
+    if (!dragging) state = e.payload; else state.on = on;
+    paint();
+  });
+
+  // ── Show / auto-hide ─────────────────────────────────────────────
+  let hideTimer, finishTimer, hovering = false;
+
+  function scheduleHide(ms) {
+    clearTimeout(hideTimer);
+    if (hovering || dragging) return;
+    hideTimer = setTimeout(() => {
+      document.body.classList.remove("shown");
+      finishTimer = setTimeout(() => win.hide(), 260);
+    }, ms);
+  }
+
+  function show(ms) {
+    clearTimeout(finishTimer);
+    requestAnimationFrame(() => document.body.classList.add("shown"));
+    scheduleHide(ms);
+  }
+  tauri.event.listen("hud-show", (e) => show(e.payload ?? 2000));
+  // The first show can arrive before this page has loaded.
+  if (await win.isVisible()) show(2600);
+
+  const card = $("card");
+  card.addEventListener("pointerenter", () => { hovering = true; clearTimeout(hideTimer); clearTimeout(finishTimer); document.body.classList.add("shown"); });
+  card.addEventListener("pointerleave", () => { hovering = false; scheduleHide(1400); });
+
+  paint();
+</script>
+</body>
+</html>
