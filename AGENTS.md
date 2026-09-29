@@ -27,11 +27,11 @@ The binary lands in `src-tauri/target/release/` as `screenlight` (`screenlight.e
 
 ## 3. Install for the user
 
-- **Windows:** copy `screenlight.exe` to `%LOCALAPPDATA%\Programs\Screenlight\`. For launch at login, add a shortcut to it in `shell:startup`.
-- **macOS:** `npx tauri build --bundles app`, then copy `src-tauri/target/release/bundle/macos/Screenlight.app` to `/Applications`. For launch at login, add it under System Settings → General → Login Items.
-- **Linux:** copy the binary to `~/.local/bin/`. For launch at login, add a `~/.config/autostart/screenlight.desktop` whose `Exec=` points at it.
+- **Windows:** copy `screenlight.exe` to `%LOCALAPPDATA%\Programs\Screenlight\`.
+- **macOS:** `npx tauri build --bundles app`, then copy `src-tauri/target/release/bundle/macos/Screenlight.app` to `/Applications`.
+- **Linux:** copy the binary to `~/.local/bin/`.
 
-Then run it. It lives in the tray/menu bar and has no main window.
+Then run it once from its final location. It lives in the tray/menu bar and has no main window, and it registers itself to launch at login (light off); untick "Launch at login" in the tray menu to stop that. Because the login entry points at the running binary, move the app into place *before* first launch.
 
 ## Platform notes
 
