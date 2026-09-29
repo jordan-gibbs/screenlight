@@ -15,7 +15,8 @@
 - **HUD**: Intensity (0–100% opacity), Warmth (2000–9000 K), Width, Softness. It fades out on its own when you're not hovering it.
 - Covers every display. Sizes scale with each display, so it looks the same on a laptop and on an ultrawide.
 - **Auto-on with camera**: lights up when any app starts using a camera, and turns back off when the camera stops. The hotkey turns it off instantly, and it stays off until the next time a camera starts.
-- Click-through, never takes focus, and is hidden from screen shares and recordings by default.
+- **Launch at login** (tray menu, on by default): starts with the light off, ready for the hotkey or camera.
+- Click-through, never takes focus, and is hidden from screen shares and recordings by default. On macOS it also shows over full-screen apps.
 
 ## Settings
 
@@ -23,7 +24,7 @@
 
 ```json
 { "intensity": 0.9, "kelvin": 5200, "width": 7, "softness": 0.65,
-  "hotkey": "Ctrl+Alt+L", "hide_from_capture": true, "auto_camera": true }
+  "hotkey": "Ctrl+Alt+L", "hide_from_capture": true, "auto_camera": true, "launch_at_login": true }
 ```
 
 ## Install
