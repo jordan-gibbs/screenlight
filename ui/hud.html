@@ -269,6 +269,7 @@
     scheduleHide(ms);
   }
   tauri.event.listen("hud-show", (e) => show(e.payload ?? 2000));
+  tauri.event.listen("hud-dismiss", () => { if (document.body.classList.contains("shown")) scheduleHide(0); });
   // The first show can arrive before this page has loaded.
   if (await win.isVisible()) show(2600);
 

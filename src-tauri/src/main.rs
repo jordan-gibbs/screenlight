@@ -19,12 +19,15 @@ use tauri::{
     tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
     AppHandle, Emitter, Manager, PhysicalPosition, WebviewUrl, WebviewWindowBuilder, Wry,
 };
+use tauri_plugin_autostart::{MacosLauncher, ManagerExt};
 use tauri_plugin_global_shortcut::{GlobalShortcutExt, ShortcutState};
 
 const DEFAULT_HOTKEY: &str = "Ctrl+Alt+L";
 const HUD_W: f64 = 380.0;
 const HUD_H: f64 = 430.0;
 const FADE_MS: u64 = 420;
+/// Passed by the OS login entry, so a login launch starts quietly.
+const AUTOSTART_ARG: &str = "--autostart";
 
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(default)]
@@ -42,6 +45,8 @@ struct Settings {
     hide_from_capture: bool,
     /// Turn on automatically while any camera is in use.
     auto_camera: bool,
+    /// Start Screenlight (light off) when you log in.
+    launch_at_login: bool,
 }
 
 impl Default for Settings {
@@ -54,6 +59,7 @@ impl Default for Settings {
             hotkey: DEFAULT_HOTKEY.into(),
             hide_from_capture: true,
             auto_camera: true,
+            launch_at_login: true,
         }
     }
 }
@@ -74,6 +80,7 @@ struct Shared {
     auto_lit: Mutex<bool>,
     toggle_item: Mutex<Option<CheckMenuItem<Wry>>>,
     auto_item: Mutex<Option<CheckMenuItem<Wry>>>,
+    login_item: Mutex<Option<CheckMenuItem<Wry>>>,
 }
 
 fn settings_path(app: &AppHandle) -> Option<PathBuf> {
@@ -152,6 +159,7 @@ fn fit_overlays(app: &AppHandle) {
             }
         };
         let _ = win.set_content_protected(hide_from_capture);
+        show_over_fullscreen(app, &win);
         let _ = win.set_position(*m.position());
         let _ = win.set_size(*m.size());
     }
@@ -163,6 +171,28 @@ fn fit_overlays(app: &AppHandle) {
         }
     }
 }
+
+/// macOS gives each full-screen app its own Space; a window only appears there
+/// if it may join every Space *and* act as a full-screen auxiliary.
+#[cfg(target_os = "macos")]
+fn show_over_fullscreen(app: &AppHandle, win: &tauri::WebviewWindow) {
+    use objc2_app_kit::{NSWindow, NSWindowCollectionBehavior as B};
+    let win = win.clone();
+    let _ = app.run_on_main_thread(move || {
+        let Ok(ptr) = win.ns_window() else { return };
+        let ns = unsafe { &*(ptr as *const NSWindow) };
+        ns.setCollectionBehavior(
+            ns.collectionBehavior()
+                | B::CanJoinAllSpaces
+                | B::FullScreenAuxiliary
+                | B::Stationary
+                | B::IgnoresCycle,
+        );
+    });
+}
+
+#[cfg(not(target_os = "macos"))]
+fn show_over_fullscreen(_app: &AppHandle, _win: &tauri::WebviewWindow) {}
 
 /// Overlays and HUD are both topmost; re-assert so the HUD stays in front.
 fn raise_hud(app: &AppHandle) {
@@ -221,6 +251,69 @@ fn toggle_light(app: &AppHandle) {
     set_light(app, !on);
 }
 
+/// Hotkey / tray toggle: the HUD pops up only when the light comes on,
+/// and a HUD that's already up gets out of the way when it goes off.
+fn toggle_from_user(app: &AppHandle, linger: u32) {
+    toggle_light(app);
+    if *app.state::<Shared>().on.lock().unwrap() {
+        show_hud(app, linger);
+    } else if let Some(hud) = app.get_webview_window("hud") {
+        let _ = hud.emit("hud-dismiss", ());
+    }
+}
+
+/// Is a full-screen app showing on this display? Its window is then a normal
+/// (layer 0) window exactly covering the display, which a merely maximized
+/// window never does because the menu bar stays.
+#[cfg(target_os = "macos")]
+fn fullscreen_on(m: &tauri::Monitor) -> bool {
+    use objc2_core_graphics::{CGWindowListCopyWindowInfo, CGWindowListOption, kCGNullWindowID};
+    use objc2_foundation::{ns_string, NSArray, NSDictionary, NSNumber, NSString};
+
+    let Some(list) = CGWindowListCopyWindowInfo(
+        CGWindowListOption::OptionOnScreenOnly | CGWindowListOption::ExcludeDesktopElements,
+        kCGNullWindowID,
+    ) else {
+        return false;
+    };
+    // CFArray of CFDictionary is toll-free bridged to NSArray of NSDictionary.
+    let list = unsafe { &*(&*list as *const _ as *const NSArray<NSDictionary<NSString>>) };
+    let num = |d: &NSDictionary<NSString>, k: &NSString| {
+        d.objectForKey(k)
+            .and_then(|v| v.downcast::<NSNumber>().ok())
+            .map(|n| n.as_f64())
+    };
+    let scale = m.scale_factor();
+    let (mx, my) = (m.position().x as f64 / scale, m.position().y as f64 / scale);
+    let (mw, mh) = (m.size().width as f64 / scale, m.size().height as f64 / scale);
+    let me = std::process::id() as f64;
+    list.iter().any(|w| {
+        if num(&w, ns_string!("kCGWindowLayer")) != Some(0.0)
+            || num(&w, ns_string!("kCGWindowOwnerPID")) == Some(me)
+        {
+            return false;
+        }
+        let Some(b) = w
+            .objectForKey(ns_string!("kCGWindowBounds"))
+            .and_then(|v| v.downcast::<NSDictionary>().ok())
+        else {
+            return false;
+        };
+        let b = unsafe { &*(&*b as *const NSDictionary as *const NSDictionary<NSString>) };
+        let get = |k| num(b, k).unwrap_or(f64::NAN);
+        let close = |a: f64, b: f64| (a - b).abs() < 1.0;
+        close(get(ns_string!("X")), mx)
+            && close(get(ns_string!("Y")), my)
+            && close(get(ns_string!("Width")), mw)
+            && close(get(ns_string!("Height")), mh)
+    })
+}
+
+#[cfg(not(target_os = "macos"))]
+fn fullscreen_on(_m: &tauri::Monitor) -> bool {
+    false
+}
+
 /// Show the HUD at the bottom-center of the display under the cursor.
 /// `linger` is how long (ms) it stays before fading if left untouched.
 fn show_hud(app: &AppHandle, linger: u32) {
@@ -232,7 +325,12 @@ fn show_hud(app: &AppHandle, linger: u32) {
         .or_else(|| app.primary_monitor().ok().flatten());
     if let Some(m) = monitor {
         let scale = m.scale_factor();
-        let area = m.work_area();
+        // The work area keeps clear of the Dock, which a full-screen app hides.
+        let area = if fullscreen_on(&m) {
+            tauri::PhysicalRect { position: *m.position(), size: *m.size() }
+        } else {
+            *m.work_area()
+        };
         let w = (HUD_W * scale) as i32;
         let h = (HUD_H * scale) as i32;
         let x = area.position.x + (area.size.width as i32 - w) / 2;
@@ -303,6 +401,26 @@ fn set_auto_camera_inner(app: &AppHandle, enabled: bool) {
     save_settings_soon(app);
 }
 
+/// Keeps the OS login entry (LaunchAgent / HKCU Run key / XDG autostart) in
+/// step with the setting.
+fn sync_login_item(app: &AppHandle) {
+    let want = app.state::<Shared>().settings.lock().unwrap().launch_at_login;
+    let launcher = app.autolaunch();
+    if launcher.is_enabled().unwrap_or(!want) != want {
+        let _ = if want { launcher.enable() } else { launcher.disable() };
+    }
+}
+
+fn set_launch_at_login(app: &AppHandle, enabled: bool) {
+    let shared = app.state::<Shared>();
+    shared.settings.lock().unwrap().launch_at_login = enabled;
+    if let Some(item) = shared.login_item.lock().unwrap().as_ref() {
+        let _ = item.set_checked(enabled);
+    }
+    sync_login_item(app);
+    save_settings_soon(app);
+}
+
 #[tauri::command]
 fn set_auto_camera(app: AppHandle, enabled: bool) {
     set_auto_camera_inner(&app, enabled);
@@ -326,14 +444,17 @@ fn build_tray(app: &AppHandle) -> tauri::Result<()> {
     let toggle = CheckMenuItem::with_id(app, "toggle", "Light", true, false, None::<&str>)?;
     let auto_on = app.state::<Shared>().settings.lock().unwrap().auto_camera;
     let auto = CheckMenuItem::with_id(app, "auto", "Auto-on with camera", true, auto_on, None::<&str>)?;
+    let login_on = app.state::<Shared>().settings.lock().unwrap().launch_at_login;
+    let login = CheckMenuItem::with_id(app, "login", "Launch at login", true, login_on, None::<&str>)?;
     let adjust = MenuItem::with_id(app, "adjust", "Adjust…", true, None::<&str>)?;
     let quit = MenuItem::with_id(app, "quit", "Quit Screenlight", true, None::<&str>)?;
     let menu = Menu::with_items(
         app,
-        &[&toggle, &auto, &adjust, &PredefinedMenuItem::separator(app)?, &quit],
+        &[&toggle, &auto, &login, &adjust, &PredefinedMenuItem::separator(app)?, &quit],
     )?;
     *app.state::<Shared>().toggle_item.lock().unwrap() = Some(toggle);
     *app.state::<Shared>().auto_item.lock().unwrap() = Some(auto);
+    *app.state::<Shared>().login_item.lock().unwrap() = Some(login);
 
     let hotkey = app.state::<Shared>().settings.lock().unwrap().hotkey.clone();
     TrayIconBuilder::with_id("tray")
@@ -342,13 +463,14 @@ fn build_tray(app: &AppHandle) -> tauri::Result<()> {
         .menu(&menu)
         .show_menu_on_left_click(false)
         .on_menu_event(|app, event| match event.id.as_ref() {
-            "toggle" => {
-                toggle_light(app);
-                show_hud(app, 1800);
-            }
+            "toggle" => toggle_from_user(app, 1800),
             "auto" => {
                 let enabled = !app.state::<Shared>().settings.lock().unwrap().auto_camera;
                 set_auto_camera_inner(app, enabled);
+            }
+            "login" => {
+                let enabled = !app.state::<Shared>().settings.lock().unwrap().launch_at_login;
+                set_launch_at_login(app, enabled);
             }
             "adjust" => show_hud(app, 5000),
             "quit" => app.exit(0),
@@ -361,9 +483,7 @@ fn build_tray(app: &AppHandle) -> tauri::Result<()> {
                 ..
             } = event
             {
-                let app = tray.app_handle();
-                toggle_light(app);
-                show_hud(app, 2400);
+                toggle_from_user(tray.app_handle(), 2400);
             }
         })
         .build(app)?;
@@ -373,12 +493,15 @@ fn build_tray(app: &AppHandle) -> tauri::Result<()> {
 fn main() {
     tauri::Builder::default()
         .plugin(tauri_plugin_single_instance::init(|app, _, _| show_hud(app, 5000)))
+        .plugin(tauri_plugin_autostart::init(
+            MacosLauncher::LaunchAgent,
+            Some(vec![AUTOSTART_ARG]),
+        ))
         .plugin(
             tauri_plugin_global_shortcut::Builder::new()
                 .with_handler(|app, _shortcut, event| {
                     if event.state == ShortcutState::Pressed {
-                        toggle_light(app);
-                        show_hud(app, 1600);
+                        toggle_from_user(app, 1600);
                     }
                 })
                 .build(),
@@ -391,9 +514,15 @@ fn main() {
             auto_lit: Mutex::new(false),
             toggle_item: Mutex::new(None),
             auto_item: Mutex::new(None),
+            login_item: Mutex::new(None),
         })
         .invoke_handler(tauri::generate_handler![get_state, set_on, update_settings, set_auto_camera, quit])
         .setup(|app| {
+            // A menu-bar-only app: no Dock icon, and its windows may float over
+            // other apps' full-screen Spaces.
+            #[cfg(target_os = "macos")]
+            app.set_activation_policy(tauri::ActivationPolicy::Accessory);
+
             let handle = app.handle().clone();
             *app.state::<Shared>().settings.lock().unwrap() = load_settings(&handle);
 
@@ -410,12 +539,16 @@ fn main() {
                 .focused(false)
                 .visible(false)
                 .build()?;
+            show_over_fullscreen(&handle, &app.get_webview_window("hud").unwrap());
 
+            sync_login_item(&handle);
             register_hotkey(&handle);
             build_tray(&handle)?;
             // Warm up overlay windows so the first toggle is instant.
             fit_overlays(&handle);
-            show_hud(&handle, 2600);
+            if !std::env::args().any(|a| a == AUTOSTART_ARG) {
+                show_hud(&handle, 2600);
+            }
             watch_camera(handle);
             Ok(())
         })
